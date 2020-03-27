@@ -1,0 +1,190 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ""
+Metadata: {}
+
+Parameters:
+    VpcId:
+        Type: AWS::EC2::VPC::Id
+        Description: Vpc Id
+
+    SubnetList:
+        Type: List<AWS::EC2::Subnet::Id>
+        Description: Select subnets for the scaling group
+
+    InstanceKeyPair:
+        Type: AWS::EC2::KeyPair::KeyName
+        Description: KeyPair for EC2 Instances
+
+    EcrImageName:
+        Type: String
+        Description: Container Image Name
+
+Mappings: {}
+
+Conditions: {}
+
+Resources:
+    Module131AutoScalingGroup:
+        Type: AWS::AutoScaling::AutoScalingGroup
+        Properties:
+            VPCZoneIdentifier: !Ref SubnetList
+            LaunchConfigurationName: !Ref Module131LaunchConfiguration
+            MaxSize: "2"
+            MinSize: "2"
+
+    Module131LaunchConfiguration:
+        Type: AWS::AutoScaling::LaunchConfiguration
+        Properties:
+            IamInstanceProfile: !Ref Module131InstanceProfile
+            ImageId: ami-02789e5e628dded7f
+            InstanceMonitoring: false
+            InstanceType: t2.micro
+            KeyName: !Ref InstanceKeyPair
+            SecurityGroups:
+                - Ref: Module131InstanceSecurityGroup
+            UserData:
+                Fn::Base64:
+                    Fn::Join:
+                        - ""
+                        - - "#!/bin/bash -ex \n"
+                          - echo ECS_CLUSTER=
+                          - !Ref Module131Cluster
+                          - " >> /etc/ecs/ecs.config;echo ECS_BACKEND_HOST= >> /etc/ecs/ecs.config;"
+
+    Module131InstanceProfile:
+        Type: AWS::IAM::InstanceProfile
+        Properties:
+            InstanceProfileName: Module_13_1_InstanceProfile
+            Roles:
+                - !Ref Module131InstanceRole
+
+    Module131InstanceRole:
+        Type: AWS::IAM::Role
+        Properties:
+            RoleName: Module_13_1_InstanceRole
+            AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: ec2.amazonaws.com
+                      Action: sts:AssumeRole
+            ManagedPolicyArns:
+                - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+
+    Module131InstanceSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: Module_13_1_SecurityGroup
+            GroupDescription: EC2 Instance Security Group
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+            VpcId: !Ref VpcId
+
+    Module131LoadBalancerSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: Module_13_1_LoadBalancerSecurityGroup
+            GroupDescription: EC2 Load Balancer Security Group
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+            VpcId: !Ref VpcId
+
+    Module131TaskDefinition:
+        Type: AWS::ECS::TaskDefinition
+        Properties:
+            ContainerDefinitions:
+                - Name: Module_13_1_Container
+                  Image: !Ref EcrImageName
+                  PortMappings:
+                    - HostPort: 80
+                      Protocol: tcp
+                      ContainerPort: 80
+                  
+            Memory: "512"
+            TaskRoleArn: !Ref Module131TaskExecutionRole
+            ExecutionRoleArn: !Ref Module131TaskExecutionRole
+            Family: Module_13_1_TaskDefinition
+
+    Module131TaskExecutionRole:
+        Type: AWS::IAM::Role
+        Properties:
+            RoleName: Module_13_1_TaskExecutionRole
+            AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: ecs-tasks.amazonaws.com
+                      Action: sts:AssumeRole
+            ManagedPolicyArns:
+                - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+    Module131ServiceRole:
+        Type: AWS::IAM::Role
+        Properties:
+            RoleName: Module_13_1_ServiceRole
+            AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: ecs.amazonaws.com
+                      Action: sts:AssumeRole
+            ManagedPolicyArns:
+                - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+
+    Module131Service:
+        Type: AWS::ECS::Service
+        Properties:
+            Cluster: !Ref Module131Cluster
+            Role: !Ref Module131ServiceRole
+            SchedulingStrategy: DAEMON
+            ServiceName: Module_13_1_Service
+            TaskDefinition: !Ref Module131TaskDefinition
+            LoadBalancers:
+                - TargetGroupArn: !Ref Module131TargetGroup
+                  ContainerPort: 80
+                  ContainerName: Module_13_1_Container
+        DependsOn:
+            - Module131Listener
+
+    Module131LoadBalancer:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties:
+            Name: Module-13-1-Loadbalancer
+            Subnets: !Ref SubnetList
+            Type: application
+            SecurityGroups:
+                - !Ref Module131LoadBalancerSecurityGroup
+
+    Module131Listener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+                - Type: forward
+                  TargetGroupArn: !Ref Module131TargetGroup
+            LoadBalancerArn: !Ref Module131LoadBalancer
+            Port: 80
+            Protocol: HTTP
+
+    Module131TargetGroup:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            Name: Module-13-1-TargetGroup
+            VpcId: !Ref VpcId
+            Port: 80
+            Protocol: HTTP
+    
+    Module131Cluster:
+        Type: AWS::ECS::Cluster
+        Properties:
+            ClusterName: Module_13_1_Cluster
+
+Outputs: {}
