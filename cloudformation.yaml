@@ -15,6 +15,11 @@ Parameters:
         Type: AWS::EC2::KeyPair::KeyName
         Description: KeyPair for EC2 Instances
 
+    RegionName:
+        Type: String
+        Description: Region Name
+        Default: eu-west-2
+
     EcrImageName:
         Type: String
         Description: Container Image Name
@@ -100,13 +105,18 @@ Resources:
         Type: AWS::ECS::TaskDefinition
         Properties:
             ContainerDefinitions:
-                - Name: Module_13_1_Container
-                  Image: !Ref EcrImageName
+                - LogConfiguration:
+                      LogDriver: awslogs
+                      Options:
+                          awslogs-group: !Ref Module131LoggingGroup
+                          awslogs-region: !Ref RegionName
+                          awslogs-stream-prefix: ecs
                   PortMappings:
-                    - HostPort: 80
-                      Protocol: tcp
-                      ContainerPort: 80
-                  
+                      - HostPort: 80
+                        Protocol: tcp
+                        ContainerPort: 80
+                  Image: !Ref EcrImageName
+                  Name: Module_13_1_Container
             Memory: "512"
             TaskRoleArn: !Ref Module131TaskExecutionRole
             ExecutionRoleArn: !Ref Module131TaskExecutionRole
@@ -181,6 +191,12 @@ Resources:
             VpcId: !Ref VpcId
             Port: 80
             Protocol: HTTP
+
+    Module131LoggingGroup:
+        Type: AWS::Logs::LogGroup
+        Properties:
+            LogGroupName: Module-13-1-LoggingGroup
+            RetentionInDays: 1
     
     Module131Cluster:
         Type: AWS::ECS::Cluster
