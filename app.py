@@ -16,4 +16,5 @@ def log_an_error():
     app.logger.log(logging.ERROR, "Something really bad happened!")
     return 'Logged Error!'
  
-app.run()
+if __name__ == "__main__":
+    app.run(host='0.0.0.0')
