@@ -239,21 +239,19 @@ Resources:
             Code:
                 ZipFile: |
                     import boto3
-                    import collections
                     from datetime import datetime, timedelta
                     import math
-                    import time
 
                     def lambda_handler(event, context):
                         print (event)
                         print (context)
                         region = event['region_name']
                         log_file = boto3.client('logs')
-                        nDays = 1
                         now = datetime.now()
                         startOfDay = now - timedelta(days=1)
                         endOfDay = now
                         group_name = event['logging_group']
+
                         response = log_file.create_export_task(
                             taskName='export_task',
                             logGroupName=group_name,
@@ -261,6 +259,7 @@ Resources:
                             to=math.floor(endOfDay.timestamp() * 1000), 
                             destination=event['destination_bucket']
                         )
+
                         print (response)
 
     Module131ArchivalLambdaRole:
