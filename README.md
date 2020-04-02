@@ -1,5 +1,5 @@
 # Module 13.1 Application Logs
-# Setting Up A Centralised Logging Server/Service
+# Managing/Archiving Logs
 
 ## Installation Requirements
 * Docker desktop
