@@ -119,7 +119,7 @@ Resources:
                   Name: Module_13_1_Container
             Memory: "512"
             TaskRoleArn: !Ref Module131TaskExecutionRole
-            ExecutionRoleArn: !Ref Module131TaskExecutionRole
+            ExecutionRoleArn: !GetAtt Module131TaskExecutionRole.Arn
             Family: Module_13_1_TaskDefinition
 
     Module131TaskExecutionRole:
@@ -202,5 +202,104 @@ Resources:
         Type: AWS::ECS::Cluster
         Properties:
             ClusterName: Module_13_1_Cluster
+
+    Module131LoggingBucket:
+        Type: AWS::S3::Bucket
+        Properties:
+            BucketName: module-13-1-logging-bucket
+
+    Module131BucketPolicy:
+        Type: AWS::S3::BucketPolicy
+        Properties:
+            Bucket: !Ref Module131LoggingBucket
+            PolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                        Service: !Sub "logs.${RegionName}.amazonaws.com"
+                      Action: s3:GetBucketAcl
+                      Resource: !Sub "${Module131LoggingBucket.Arn}"
+                    - Effect: Allow
+                      Principal:
+                        Service: !Sub "logs.${RegionName}.amazonaws.com"
+                      Action: s3:PutObject
+                      Resource: !Sub "${Module131LoggingBucket.Arn}/*"
+                      Condition:
+                        StringEquals:
+                            s3:x-amz-acl: bucket-owner-full-control
+
+    Module131ArchivalLambda:
+        Type: AWS::Lambda::Function
+        Properties:
+            Handler: "index.lambda_handler"
+            Role: !GetAtt Module131ArchivalLambdaRole.Arn
+            Runtime: "python3.7"
+            Timeout: 60
+            Code:
+                ZipFile: |
+                    import boto3
+                    import collections
+                    from datetime import datetime, timedelta
+                    import math
+                    import time
+
+                    def lambda_handler(event, context):
+                        print (event)
+                        print (context)
+                        region = event['region_name']
+                        log_file = boto3.client('logs')
+                        nDays = 1
+                        now = datetime.now()
+                        startOfDay = now - timedelta(days=1)
+                        endOfDay = now
+                        group_name = event['logging_group']
+                        response = log_file.create_export_task(
+                            taskName='export_task',
+                            logGroupName=group_name,
+                            fromTime=math.floor(startOfDay.timestamp() * 1000), 
+                            to=math.floor(endOfDay.timestamp() * 1000), 
+                            destination=event['destination_bucket']
+                        )
+                        print (response)
+
+    Module131ArchivalLambdaRole:
+        Type: AWS::IAM::Role
+        Properties:
+            RoleName: Module_13_1_ArchivalLambdaRole
+            AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: lambda.amazonaws.com
+                      Action: sts:AssumeRole
+            ManagedPolicyArns:
+                - arn:aws:iam::aws:policy/AmazonS3FullAccess
+                - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+                - arn:aws:iam::aws:policy/CloudWatchEventsFullAccess
+
+    Module131ArchivalTriggerRule:
+        Type: AWS::Events::Rule
+        Properties:
+            Name: Module_13_1_ArchivalTriggerRule
+            ScheduleExpression: "cron(0 0 * * ? *)"
+            Targets:
+                - Arn: !GetAtt Module131ArchivalLambda.Arn
+                  Id: "Lambda"
+                  Input: !Sub |
+                    {
+                        "region_name": "${RegionName}",
+                        "logging_group": "${Module131LoggingGroup}",
+                        "destination_bucket": "${Module131LoggingBucket}"
+                    }
+
+    Module131ArchivalTriggerPermission:
+        Type: AWS::Lambda::Permission
+        Properties:
+            Action: "lambda:InvokeFunction"
+            FunctionName: !Ref Module131ArchivalLambda
+            Principal: "events.amazonaws.com"
+            SourceArn: !GetAtt Module131ArchivalTriggerRule.Arn
 
 Outputs: {}
