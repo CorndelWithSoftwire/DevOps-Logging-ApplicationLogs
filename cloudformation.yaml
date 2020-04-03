@@ -257,7 +257,8 @@ Resources:
                             logGroupName=group_name,
                             fromTime=math.floor(startOfDay.timestamp() * 1000), 
                             to=math.floor(endOfDay.timestamp() * 1000), 
-                            destination=event['destination_bucket']
+                            destination=event['destination_bucket'],
+                            destinationPrefix="ExportedLogs-" + now.isoformat()
                         )
 
                         print (response)
