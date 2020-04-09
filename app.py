@@ -10,7 +10,7 @@ class FormatterJSON(logging.Formatter):
         record.message = record.getMessage()
         record.asctime = self.formatTime(record, self.datefmt)
 
-        json = {
+        json_log = {
             'levelname': record.levelname,
             'time': '%(asctime)s.%(msecs)dZ' % dict(asctime=record.asctime, msecs=record.msecs),
             'aws_request_id': getattr(record, 'aws_request_id', '00000000-0000-0000-0000-000000000000'),
@@ -20,9 +20,9 @@ class FormatterJSON(logging.Formatter):
         }
         
         if record.stack_info:
-            j.stack_info = record.stack_info
+            json_log.stack_info = record.stack_info
             
-        return json.dumps(j)
+        return json.dumps(json_log)
 
 fileConfig('./logging.conf')
 
